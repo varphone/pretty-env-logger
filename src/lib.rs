@@ -174,7 +174,7 @@ pub fn formatted_builder() -> Builder {
         let level = colored_level(style, record.level());
 
         let style = f.default_level_style(record.level());
-        let target = padded_target(style, target, max_width);
+        let target = padded_target(style.bold(), target, max_width);
 
         writeln!(f, " {} {} > {}", level, target, record.args(),)
     });
@@ -199,7 +199,7 @@ pub fn formatted_timed_builder() -> Builder {
         let level = colored_level(style, record.level());
 
         let style = f.default_level_style(record.level());
-        let target = padded_target(style, target, max_width);
+        let target = padded_target(style.bold(), target, max_width);
 
         let time = f.timestamp_millis();
 
