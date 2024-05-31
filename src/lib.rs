@@ -41,11 +41,12 @@ pub extern crate env_logger;
 
 extern crate log;
 
+use std::borrow::Cow;
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use env_logger::{
-    fmt::{Color, Style, StyledValue},
+    fmt::style::{AnsiColor, Style},
     Builder,
 };
 use log::Level;
@@ -169,14 +170,11 @@ pub fn formatted_builder() -> Builder {
         let target = record.target();
         let max_width = max_target_width(target);
 
-        let mut style = f.style();
-        let level = colored_level(&mut style, record.level());
+        let style = f.default_level_style(record.level());
+        let level = colored_level(style, record.level());
 
-        let mut style = f.style();
-        let target = style.set_bold(true).value(Padded {
-            value: target,
-            width: max_width,
-        });
+        let style = f.default_level_style(record.level());
+        let target = padded_target(style, target, max_width);
 
         writeln!(f, " {} {} > {}", level, target, record.args(),)
     });
@@ -197,14 +195,11 @@ pub fn formatted_timed_builder() -> Builder {
         let target = record.target();
         let max_width = max_target_width(target);
 
-        let mut style = f.style();
-        let level = colored_level(&mut style, record.level());
+        let style = f.default_level_style(record.level());
+        let level = colored_level(style, record.level());
 
-        let mut style = f.style();
-        let target = style.set_bold(true).value(Padded {
-            value: target,
-            width: max_width,
-        });
+        let style = f.default_level_style(record.level());
+        let target = padded_target(style, target, max_width);
 
         let time = f.timestamp_millis();
 
@@ -225,6 +220,17 @@ impl<T: fmt::Display> fmt::Display for Padded<T> {
     }
 }
 
+struct StyledValue<'a, T> {
+    style: Cow<'a, Style>,
+    value: T,
+}
+
+impl<T: fmt::Display> fmt::Display for StyledValue<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}{:#}", self.style, self.value, self.style)
+    }
+}
+
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
 fn max_target_width(target: &str) -> usize {
@@ -237,12 +243,26 @@ fn max_target_width(target: &str) -> usize {
     }
 }
 
-fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'static str> {
-    match level {
-        Level::Trace => style.set_color(Color::Magenta).value("TRACE"),
-        Level::Debug => style.set_color(Color::Blue).value("DEBUG"),
-        Level::Info => style.set_color(Color::Green).value("INFO "),
-        Level::Warn => style.set_color(Color::Yellow).value("WARN "),
-        Level::Error => style.set_color(Color::Red).value("ERROR"),
+fn colored_level<'r>(style: Style, level: Level) -> StyledValue<'r, &'static str> {
+    let (style, value) = match level {
+        Level::Trace => (style.fg_color(Some(AnsiColor::Magenta.into())), "TRACE"),
+        Level::Debug => (style.fg_color(Some(AnsiColor::Blue.into())), "DEBUG"),
+        Level::Info => (style.fg_color(Some(AnsiColor::Green.into())), "INFO "),
+        Level::Warn => (style.fg_color(Some(AnsiColor::Yellow.into())), "WARN "),
+        Level::Error => (style.fg_color(Some(AnsiColor::Red.into())), "ERROR"),
+    };
+    StyledValue {
+        style: Cow::Owned(style),
+        value,
+    }
+}
+
+fn padded_target<'r>(style: Style, target: &str, width: usize) -> StyledValue<'r, Padded<&'_ str>> {
+    StyledValue {
+        style: Cow::Owned(style),
+        value: Padded {
+            value: target,
+            width,
+        },
     }
 }
